@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Quản Lý Sinh Viên - Microservices Architecture</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af',
+                        secondary: '#0284c7',
+                        success: '#16a34a',
+                        danger: '#dc2626'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- Header Navigation -->
+    <header class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-600 p-2 rounded-lg shadow">
+                        <i class="fa-solid fa-graduation-cap text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <span class="text-xl font-bold tracking-tight">StudentMS</span>
+                        <span class="ml-2 px-2 py-0.5 text-xs bg-blue-500/30 text-blue-200 border border-blue-400/30 rounded-full">Monorepo Microservices</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 text-xs text-slate-300">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Kafka & gRPC Connected
+                    </span>
+                    <a href="/actuator/prometheus" target="_blank" class="hover:text-white px-2 py-1 rounded bg-slate-800 border border-slate-700 hover:border-slate-500 transition">
+                        <i class="fa-solid fa-chart-line mr-1"></i> Prometheus
+                    </a>
+                </div>
+            </div>
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-1 border-t border-slate-700/60 pt-1">
+                <button onclick="switchTab('tab-students')" id="nav-students" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-blue-400 text-white flex items-center gap-2 transition">
+                    <i class="fa-solid fa-users"></i> 1. Hồ Sơ Sinh Viên
+                </button>
+                <button onclick="switchTab('tab-grades')" id="nav-grades" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 transition">
+                    <i class="fa-solid fa-file-signature"></i> 2. Nhập Điểm (gRPC + Kafka)
+                </button>
+                <button onclick="switchTab('tab-analytics')" id="nav-analytics" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 transition">
+                    <i class="fa-solid fa-chart-pie"></i> 3. Thống Kê & Kết Xuất Đỗ/Trượt
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Toast Notification Area -->
+        <div id="toast-container" class="fixed top-20 right-5 z-50 space-y-3 pointer-events-none"></div>
+
+        <!-- TAB 1: HỒ SƠ SINH VIÊN -->
+        <section id="tab-students" class="space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Quản lý Hồ sơ Sinh viên</h2>
+                    <p class="text-sm text-slate-500">Giao tiếp trực tiếp với <code class="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">student-service (port 8081)</code> & lưu trữ tại <code class="text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded">student_db</code></p>
+                </div>
+                <button onclick="openModal('modal-add-student')" class="inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+                    <i class="fa-solid fa-plus mr-2"></i> Thêm Sinh Viên Mới
+                </button>
+            </div>
+
+            <!-- Search & Actions Bar -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+                <div class="relative w-full md:w-96">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="student-search-input" placeholder="Tìm theo tên hoặc mã sinh viên..." 
+                           class="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="clearStudentSearch()" id="student-clear-search" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="searchStudents()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg transition">
+                        Tìm kiếm
+                    </button>
+                    <button onclick="loadStudents()" class="p-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 transition" title="Làm mới">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table of Students -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold uppercase tracking-wider">
+                                <th class="py-3.5 px-4">ID</th>
+                                <th class="py-3.5 px-4">Mã Sinh Viên</th>
+                                <th class="py-3.5 px-4">Họ và Tên</th>
+                                <th class="py-3.5 px-4">Năm Sinh</th>
+                                <th class="py-3.5 px-4">Email</th>
+                                <th class="py-3.5 px-4">Ngành Học</th>
+                                <th class="py-3.5 px-4 text-center">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-table-body" class="divide-y divide-slate-100 text-sm">
+                            <tr>
+                                <td colspan="7" class="py-8 text-center text-slate-400">Đang tải danh sách sinh viên...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: NHẬP ĐIỂM (gRPC + KAFKA) -->
+        <section id="tab-grades" class="space-y-6 hidden">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-900">Nhập Điểm & Điều Phối Bất Đồng Bộ</h2>
+                <p class="text-sm text-slate-500">Quy trình: <strong>gRPC Client</strong> (Xác thực sinh viên) &rarr; <strong>Postgres</strong> (Lưu điểm) &rarr; <strong>Kafka Event</strong> (Bắn topic <code class="text-purple-600 bg-purple-50 px-1 py-0.5 rounded">student-grade-events</code>)</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Form Nhập Điểm -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                    <h3 class="text-lg font-semibold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-pen-nib text-blue-600"></i> Phiếu Nhập Điểm
+                    </h3>
+                    <form id="form-add-grade" onsubmit="submitGrade(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Chọn Sinh Viên (*)</label>
+                            <select id="grade-student-select" required class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Chọn sinh viên --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Tên Môn Học (*)</label>
+                            <input type="text" id="grade-subject" required placeholder="Ví dụ: Kiến trúc Microservices" 
+                                   class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Số Tín Chỉ (*)</label>
+                                <input type="number" id="grade-credits" min="1" max="10" value="3" required 
+                                       class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Điểm Số (0 - 10) (*)</label>
+                                <input type="number" id="grade-score" min="0" max="10" step="0.1" placeholder="8.5" required 
+                                       class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-submit-grade" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg shadow transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-paper-plane"></i> Lưu Điểm & Phát Sự Kiện Kafka
+                        </button>
+                    </form>
+
+                    <!-- Real-time Event Pipeline Feedback -->
+                    <div id="grade-pipeline-status" class="hidden mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-2">
+                        <div class="font-semibold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-arrows-split-up-and-left text-blue-600"></i> Tiến trình điều phối Microservices:
+                        </div>
+                        <div id="step-grpc" class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-regular fa-circle-check text-emerald-600"></i>
+                            <span>1. gRPC Client &rarr; student-service (9091): Xác thực ID sinh viên.</span>
+                        </div>
+                        <div id="step-db" class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-regular fa-circle-check text-emerald-600"></i>
+                            <span>2. Spring JPA: Lưu điểm môn học vào grade_db.</span>
+                        </div>
+                        <div id="step-kafka" class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-regular fa-circle-check text-emerald-600"></i>
+                            <span>3. Kafka Producer: Gửi StudentGradeEvent sang topic 'student-grade-events'.</span>
+                        </div>
+                        <div id="step-analytics" class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-regular fa-circle-check text-emerald-600"></i>
+                            <span>4. analytics-service: Tự động cập nhật GPA & trạng thái ĐỖ/TRƯỢT.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bảng Điểm Chi Tiết Của Sinh Viên Được Chọn -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-slate-100 gap-2">
+                            <div>
+                                <h3 class="text-lg font-semibold text-slate-800" id="grade-view-student-name">Bảng Điểm Sinh Viên</h3>
+                                <p class="text-xs text-slate-500" id="grade-view-student-info">Vui lòng chọn sinh viên để xem chi tiết</p>
+                            </div>
+                            <div id="grade-view-summary-badge" class="flex items-center gap-2"></div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold uppercase">
+                                        <th class="py-3 px-4">#</th>
+                                        <th class="py-3 px-4">Tên Môn Học</th>
+                                        <th class="py-3 px-4 text-center">Số Tín Chỉ</th>
+                                        <th class="py-3 px-4 text-right">Điểm Số</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grade-table-body" class="divide-y divide-slate-100 text-sm">
+                                    <tr>
+                                        <td colspan="4" class="py-8 text-center text-slate-400">Chưa có dữ liệu điểm</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: THỐNG KÊ & KẾT XUẤT ĐỖ/TRƯỢT -->
+        <section id="tab-analytics" class="space-y-6 hidden">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Thống Kê & Kết Xuất Xếp Loại</h2>
+                    <p class="text-sm text-slate-500">Dữ liệu tổng hợp tự động từ <code class="text-purple-600 bg-purple-50 px-1 py-0.5 rounded">analytics-service (port 8083)</code> qua Kafka Consumer</p>
+                </div>
+                <button onclick="exportCSV()" class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+                    <i class="fa-solid fa-file-csv mr-2 text-base"></i> Xuất Báo Cáo CSV
+                </button>
+            </div>
+
+            <!-- Stats Overview Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-medium text-slate-500 uppercase">Tổng Sinh Viên</span>
+                    <p class="text-2xl font-bold text-slate-800 mt-1" id="stat-total">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-medium text-emerald-600 uppercase">Số Lượng ĐỖ</span>
+                    <p class="text-2xl font-bold text-emerald-600 mt-1" id="stat-passed">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-medium text-red-600 uppercase">Số Lượng TRƯỢT</span>
+                    <p class="text-2xl font-bold text-red-600 mt-1" id="stat-failed">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-medium text-blue-600 uppercase">GPA Trung Bình</span>
+                    <p class="text-2xl font-bold text-blue-600 mt-1" id="stat-avg-gpa">0.0</p>
+                </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Năm Sinh</label>
+                        <input type="number" id="filter-birth-year" placeholder="Ví dụ: 2004" 
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Điểm GPA Tối Thiểu (Min)</label>
+                        <input type="number" id="filter-min-gpa" min="0" max="10" step="0.1" placeholder="0.0" 
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Điểm GPA Tối Đa (Max)</label>
+                        <input type="number" id="filter-max-gpa" min="0" max="10" step="0.1" placeholder="10.0" 
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Trạng Thái</label>
+                        <select id="filter-status" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Tất cả trạng thái --</option>
+                            <option value="ĐỖ">ĐỖ (GPA &ge; 5.0)</option>
+                            <option value="TRƯỢT">TRƯỢT (GPA &lt; 5.0)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                    <button onclick="resetFilters()" class="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition">
+                        Đặt lại bộ lọc
+                    </button>
+                    <button onclick="applyFilters()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition flex items-center gap-2">
+                        <i class="fa-solid fa-filter"></i> Lọc Dữ Liệu
+                    </button>
+                </div>
+            </div>
+
+            <!-- Analytics Results Table -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse" id="analytics-table">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold uppercase tracking-wider">
+                                <th class="py-3.5 px-4">Mã Sinh Viên</th>
+                                <th class="py-3.5 px-4">Họ và Tên</th>
+                                <th class="py-3.5 px-4">Năm Sinh</th>
+                                <th class="py-3.5 px-4 text-center">Điểm GPA Tích Lũy</th>
+                                <th class="py-3.5 px-4 text-center">Trạng Thái</th>
+                                <th class="py-3.5 px-4 text-right">Cập Nhật Lần Cuối</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analytics-table-body" class="divide-y divide-slate-100 text-sm">
+                            <tr>
+                                <td colspan="6" class="py-8 text-center text-slate-400">Đang tải dữ liệu phân tích...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL: THÊM SINH VIÊN MỚI -->
+    <div id="modal-add-student" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-bold text-slate-800">Thêm Mới Hồ Sơ Sinh Viên</h3>
+                <button onclick="closeModal('modal-add-student')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <form id="form-create-student" onsubmit="createStudent(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Mã Sinh Viên (*)</label>
+                    <input type="text" id="new-student-code" required placeholder="Ví dụ: SV202601" 
+                           class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Họ và Tên (*)</label>
+                    <input type="text" id="new-full-name" required placeholder="Ví dụ: Nguyễn Văn An" 
+                           class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Năm Sinh (*)</label>
+                        <input type="number" id="new-birth-year" required min="1970" max="2026" placeholder="2004" 
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Ngành Học</label>
+                        <input type="text" id="new-major" placeholder="Ví dụ: Công nghệ thông tin" 
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Email</label>
+                    <input type="email" id="new-email" placeholder="an.nguyen@haui.edu.vn" 
+                           class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-add-student')" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow transition">Lưu Hồ Sơ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: XEM CHI TIẾT SINH VIÊN -->
+    <div id="modal-view-student" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-bold text-slate-800">Thông Tin Chi Tiết Sinh Viên</h3>
+                <button onclick="closeModal('modal-view-student')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div id="modal-student-detail-content" class="space-y-3 text-sm"></div>
+            <div class="flex justify-end pt-3 border-t border-slate-100">
+                <button onclick="closeModal('modal-view-student')" class="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JavaScript -->
+    <script>
+        const API_BASE = ''; // Same-origin qua Spring Cloud Gateway
+        let allStudentsCache = [];
+        let currentAnalyticsList = [];
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-400', 'text-white');
+                btn.classList.add('border-transparent', 'text-slate-400');
+            });
+
+            if (tabId === 'tab-students') {
+                document.getElementById('nav-students').classList.add('border-blue-400', 'text-white');
+                document.getElementById('nav-students').classList.remove('border-transparent', 'text-slate-400');
+                loadStudents();
+            } else if (tabId === 'tab-grades') {
+                document.getElementById('nav-grades').classList.add('border-blue-400', 'text-white');
+                document.getElementById('nav-grades').classList.remove('border-transparent', 'text-slate-400');
+                populateStudentSelect();
+            } else if (tabId === 'tab-analytics') {
+                document.getElementById('nav-analytics').classList.add('border-blue-400', 'text-white');
+                document.getElementById('nav-analytics').classList.remove('border-transparent', 'text-slate-400');
+                applyFilters();
+            }
+        }
+
+        // Modal Helpers
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-emerald-600 text-white',
+                danger: 'bg-red-600 text-white',
+                info: 'bg-blue-600 text-white'
+            };
+            const icons = {
+                success: 'fa-circle-check',
+                danger: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+            toast.className = `flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm pointer-events-auto transition transform translate-y-2 opacity-0 duration-300 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // ===================== TAB 1: STUDENT SERVICE =====================
+        async function loadStudents() {
+            const tbody = document.getElementById('student-table-body');
+            tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang tải dữ liệu từ student-service...</td></tr>`;
+            try {
+                const res = await fetch(`${API_BASE}/api/students`);
+                if (!res.ok) throw new Error('Không thể lấy danh sách sinh viên');
+                allStudentsCache = await res.json();
+                renderStudentTable(allStudentsCache);
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-red-500 font-medium"><i class="fa-solid fa-circle-exclamation mr-2"></i>Lỗi kết nối tới student-service: ${err.message}</td></tr>`;
+                showToast(err.message, 'danger');
+            }
+        }
+
+        function renderStudentTable(students) {
+            const tbody = document.getElementById('student-table-body');
+            if (!students || students.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">Không có hồ sơ sinh viên nào.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = students.map((s, index) => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4 font-mono text-xs text-slate-500">${s.id}</td>
+                    <td class="py-3 px-4 font-semibold text-blue-600">${s.studentCode}</td>
+                    <td class="py-3 px-4 font-medium text-slate-900">${s.fullName}</td>
+                    <td class="py-3 px-4 text-slate-600">${s.birthYear}</td>
+                    <td class="py-3 px-4 text-slate-500 text-xs">${s.email || '-'}</td>
+                    <td class="py-3 px-4 text-slate-700">${s.major || '-'}</td>
+                    <td class="py-3 px-4 text-center space-x-1">
+                        <button onclick="viewStudentDetail(${s.id})" class="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition" title="Xem chi tiết">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button onclick="quickGradeForStudent(${s.id})" class="px-2.5 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded transition font-medium" title="Nhập điểm ngay">
+                            <i class="fa-solid fa-marker mr-1"></i> Nhập Điểm
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function createStudent(e) {
+            e.preventDefault();
+            const data = {
+                studentCode: document.getElementById('new-student-code').value.trim(),
+                fullName: document.getElementById('new-full-name').value.trim(),
+                birthYear: parseInt(document.getElementById('new-birth-year').value),
+                email: document.getElementById('new-email').value.trim(),
+                major: document.getElementById('new-major').value.trim()
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/api/students`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.message || 'Lỗi khi tạo sinh viên');
+                }
+
+                showToast(`Đã thêm thành công sinh viên ${data.studentCode}!`, 'success');
+                closeModal('modal-add-student');
+                document.getElementById('form-create-student').reset();
+                loadStudents();
+            } catch (err) {
+                showToast(err.message, 'danger');
+            }
+        }
+
+        async function searchStudents() {
+            const keyword = document.getElementById('student-search-input').value.trim();
+            const clearBtn = document.getElementById('student-clear-search');
+            clearBtn.classList.toggle('hidden', keyword === '');
+
+            if (!keyword) {
+                loadStudents();
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/students/search?keyword=${encodeURIComponent(keyword)}`);
+                if (!res.ok) throw new Error('Lỗi tìm kiếm');
+                const results = await res.json();
+                renderStudentTable(results);
+            } catch (err) {
+                showToast(err.message, 'danger');
+            }
+        }
+
+        function clearStudentSearch() {
+            document.getElementById('student-search-input').value = '';
+            document.getElementById('student-clear-search').classList.add('hidden');
+            loadStudents();
+        }
+
+        function viewStudentDetail(id) {
+            const s = allStudentsCache.find(item => item.id === id);
+            if (!s) return;
+            const container = document.getElementById('modal-student-detail-content');
+            container.innerHTML = `
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+                        ${s.fullName.charAt(0)}
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-900">${s.fullName}</h4>
+                        <span class="text-xs text-blue-700 font-mono">${s.studentCode}</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="p-2 bg-slate-50 rounded"><strong>Năm sinh:</strong> ${s.birthYear}</div>
+                    <div class="p-2 bg-slate-50 rounded"><strong>Ngành học:</strong> ${s.major || 'Chưa cập nhật'}</div>
+                    <div class="p-2 bg-slate-50 rounded col-span-2"><strong>Email:</strong> ${s.email || 'Chưa cập nhật'}</div>
+                </div>
+            `;
+            openModal('modal-view-student');
+        }
+
+        function quickGradeForStudent(id) {
+            switchTab('tab-grades');
+            setTimeout(() => {
+                const select = document.getElementById('grade-student-select');
+                select.value = id;
+                loadStudentGrades(id);
+            }, 100);
+        }
+
+        // ===================== TAB 2: GRADE SERVICE (gRPC & KAFKA) =====================
+        async function populateStudentSelect() {
+            const select = document.getElementById('grade-student-select');
+            try {
+                if (allStudentsCache.length === 0) {
+                    const res = await fetch(`${API_BASE}/api/students`);
+                    allStudentsCache = await res.json();
+                }
+                select.innerHTML = `<option value="">-- Chọn sinh viên --</option>` +
+                    allStudentsCache.map(s => `<option value="${s.id}">${s.studentCode} - ${s.fullName} (${s.birthYear})</option>`).join('');
+                
+                select.onchange = (e) => {
+                    if (e.target.value) {
+                        loadStudentGrades(e.target.value);
+                    } else {
+                        resetGradeView();
+                    }
+                };
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadStudentGrades(studentId) {
+            const tbody = document.getElementById('grade-table-body');
+            const summaryBadge = document.getElementById('grade-view-summary-badge');
+            tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang lấy bảng điểm...</td></tr>`;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/grades/student/${studentId}`);
+                if (!res.ok) throw new Error('Không thể tải bảng điểm');
+                const data = await res.json();
+
+                document.getElementById('grade-view-student-name').textContent = `${data.fullName} (${data.studentCode})`;
+                document.getElementById('grade-view-student-info').textContent = `Năm sinh: ${data.birthYear} | Tổng số môn đã học: ${data.grades.length}`;
+
+                const badgeColor = data.status === 'ĐỖ' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 
+                                  (data.status === 'TRƯỢT' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-slate-100 text-slate-600 border-slate-300');
+                summaryBadge.innerHTML = `
+                    <div class="text-right">
+                        <span class="text-xs text-slate-500 uppercase">GPA Tích Lũy</span>
+                        <div class="text-xl font-black text-slate-900">${data.gpa.toFixed(2)}</div>
+                    </div>
+                    <span class="px-3 py-1 text-xs font-bold rounded-full border ${badgeColor}">${data.status}</span>
+                `;
+
+                if (data.grades.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-slate-400">Sinh viên này chưa có môn học nào được chấm điểm.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = data.grades.map((g, idx) => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4 text-xs text-slate-500">${idx + 1}</td>
+                        <td class="py-3 px-4 font-medium text-slate-900">${g.subjectName}</td>
+                        <td class="py-3 px-4 text-center font-mono">${g.credits}</td>
+                        <td class="py-3 px-4 text-right font-bold ${g.score >= 5 ? 'text-emerald-600' : 'text-red-600'}">${g.score.toFixed(1)}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-red-500">${err.message}</td></tr>`;
+            }
+        }
+
+        function resetGradeView() {
+            document.getElementById('grade-view-student-name').textContent = 'Bảng Điểm Sinh Viên';
+            document.getElementById('grade-view-student-info').textContent = 'Vui lòng chọn sinh viên để xem chi tiết';
+            document.getElementById('grade-view-summary-badge').innerHTML = '';
+            document.getElementById('grade-table-body').innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400">Chưa chọn sinh viên</td></tr>`;
+        }
+
+        async function submitGrade(e) {
+            e.preventDefault();
+            const studentId = parseInt(document.getElementById('grade-student-select').value);
+            const subjectName = document.getElementById('grade-subject').value.trim();
+            const credits = parseInt(document.getElementById('grade-credits').value);
+            const score = parseFloat(document.getElementById('grade-score').value);
+
+            const pipeline = document.getElementById('grade-pipeline-status');
+            pipeline.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/grades`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ studentId, subjectName, credits, score })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.message || 'Lỗi khi nhập điểm');
+                }
+
+                showToast(`Đã lưu điểm môn ${subjectName} & điều phối Kafka thành công!`, 'success');
+                document.getElementById('grade-subject').value = '';
+                document.getElementById('grade-score').value = '';
+
+                // Reload bảng điểm
+                loadStudentGrades(studentId);
+            } catch (err) {
+                showToast(err.message, 'danger');
+            }
+        }
+
+        // ===================== TAB 3: ANALYTICS & FILTER =====================
+        async function applyFilters() {
+            const tbody = document.getElementById('analytics-table-body');
+            tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang lấy dữ liệu từ analytics-service...</td></tr>`;
+
+            const birthYear = document.getElementById('filter-birth-year').value;
+            const minGpa = document.getElementById('filter-min-gpa').value;
+            const maxGpa = document.getElementById('filter-max-gpa').value;
+            const status = document.getElementById('filter-status').value;
+
+            const params = new URLSearchParams();
+            if (birthYear) params.append('birthYear', birthYear);
+            if (minGpa) params.append('minGpa', minGpa);
+            if (maxGpa) params.append('maxGpa', maxGpa);
+            if (status) params.append('status', status);
+
+            try {
+                const url = `${API_BASE}/api/analytics/filter${params.toString() ? '?' + params.toString() : ''}`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Lỗi truy vấn dữ liệu phân tích');
+                currentAnalyticsList = await res.json();
+                renderAnalyticsTable(currentAnalyticsList);
+                updateStatsOverview(currentAnalyticsList);
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-red-500 font-medium">${err.message}</td></tr>`;
+                showToast(err.message, 'danger');
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-birth-year').value = '';
+            document.getElementById('filter-min-gpa').value = '';
+            document.getElementById('filter-max-gpa').value = '';
+            document.getElementById('filter-status').value = '';
+            applyFilters();
+        }
+
+        function renderAnalyticsTable(list) {
+            const tbody = document.getElementById('analytics-table-body');
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">Không có bản ghi nào khớp với tiêu chí lọc.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(item => {
+                const isPassed = item.status === 'ĐỖ';
+                const badge = isPassed 
+                    ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200"><i class="fa-solid fa-check mr-1"></i>ĐỖ</span>`
+                    : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200"><i class="fa-solid fa-xmark mr-1"></i>TRƯỢT</span>`;
+
+                const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString('vi-VN') : 'Mới cập nhật';
+
+                return `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3.5 px-4 font-semibold text-blue-600">${item.studentCode}</td>
+                        <td class="py-3.5 px-4 font-medium text-slate-900">${item.fullName}</td>
+                        <td class="py-3.5 px-4 text-slate-600">${item.birthYear || '-'}</td>
+                        <td class="py-3.5 px-4 text-center font-black text-base ${isPassed ? 'text-emerald-600' : 'text-red-600'}">${item.gpa.toFixed(2)}</td>
+                        <td class="py-3.5 px-4 text-center">${badge}</td>
+                        <td class="py-3.5 px-4 text-right text-xs text-slate-400 font-mono">${dateStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateStatsOverview(list) {
+            const total = list.length;
+            const passed = list.filter(i => i.status === 'ĐỖ').length;
+            const failed = list.filter(i => i.status === 'TRƯỢT').length;
+            const avgGpa = total > 0 ? (list.reduce((acc, cur) => acc + cur.gpa, 0) / total).toFixed(2) : '0.0';
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-passed').textContent = `${passed} (${total > 0 ? Math.round(passed/total*100) : 0}%)`;
+            document.getElementById('stat-failed').textContent = `${failed} (${total > 0 ? Math.round(failed/total*100) : 0}%)`;
+            document.getElementById('stat-avg-gpa').textContent = avgGpa;
+        }
+
+        // Export to CSV Functionality
+        function exportCSV() {
+            if (!currentAnalyticsList || currentAnalyticsList.length === 0) {
+                showToast('Không có dữ liệu để xuất CSV!', 'info');
+                return;
+            }
+
+            const headers = ['Mã Sinh Viên', 'Họ và Tên', 'Năm Sinh', 'Điểm GPA', 'Trạng Thái', 'Thời Gian Cập Nhật'];
+            const rows = currentAnalyticsList.map(item => [
+                `"${item.studentCode}"`,
+                `"${item.fullName}"`,
+                item.birthYear || '',
+                item.gpa.toFixed(2),
+                `"${item.status}"`,
+                `"${item.updatedAt || ''}"`
+            ]);
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `BaoCao_XepLoai_SinhVien_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Đã xuất file CSV thành công!', 'success');
+        }
+
+        // Initialize App on DOM Load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStudents();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package com.student.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.student.grpc";
+option java_outer_classname = "StudentProto";
+
+service StudentGrpcService {
+  rpc GetStudentById (StudentRequest) returns (StudentResponse);
+}
+
+message StudentRequest {
+  int64 id = 1;
+}
+
+message StudentResponse {
+  int64 id = 1;
+  string studentCode = 2;
+  string fullName = 3;
+  int32 birthYear = 4;
+  string major = 5;
+  bool exists = 6;
+}

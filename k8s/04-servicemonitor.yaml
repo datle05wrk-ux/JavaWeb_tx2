@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: student-management-servicemonitor
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - student-system
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - student-service
+          - grade-service
+          - analytics-service
+          - api-gateway
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: true

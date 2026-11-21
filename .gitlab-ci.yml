@@ -1,0 +1,108 @@
+stages:
+  - test
+  - build-push
+  - deploy-compose
+  - deploy-minikube
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .m2/repository
+
+# ========================================================
+# STAGE 1: TEST
+# ========================================================
+maven-unit-test:
+  stage: test
+  image: maven:3.9.8-eclipse-temurin-21-alpine
+  script:
+    - echo "Running unit tests across all microservices..."
+    - mvn clean test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ========================================================
+# STAGE 2: BUILD-PUSH DOCKER IMAGES
+# ========================================================
+docker-build-and-push:
+  stage: build-push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - echo "Logging into GitLab Container Registry..."
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - echo "Building and pushing student-service image..."
+    - docker build -t $CI_REGISTRY_IMAGE/student-service:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE/student-service:latest -f student-service/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE/student-service:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/student-service:latest
+
+    - echo "Building and pushing grade-service image..."
+    - docker build -t $CI_REGISTRY_IMAGE/grade-service:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE/grade-service:latest -f grade-service/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE/grade-service:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/grade-service:latest
+
+    - echo "Building and pushing analytics-service image..."
+    - docker build -t $CI_REGISTRY_IMAGE/analytics-service:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE/analytics-service:latest -f analytics-service/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE/analytics-service:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/analytics-service:latest
+
+    - echo "Building and pushing api-gateway image..."
+    - docker build -t $CI_REGISTRY_IMAGE/api-gateway:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE/api-gateway:latest -f api-gateway/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE/api-gateway:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/api-gateway:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ========================================================
+# STAGE 3: DEPLOY DOCKER COMPOSE
+# ========================================================
+deploy-docker-compose:
+  stage: deploy-compose
+  image: docker/compose:latest
+  script:
+    - echo "Updating and restarting services via Docker Compose..."
+    - docker compose down --remove-orphans || true
+    - docker compose up -d --build
+  environment:
+    name: staging-compose
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ========================================================
+# STAGE 4: DEPLOY MINIKUBE & ROLLOUT STATUS
+# ========================================================
+deploy-to-minikube:
+  stage: deploy-minikube
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Deploying Infrastructure to Kubernetes (Minikube)..."
+    - kubectl apply -f k8s/01-infra.yaml
+
+    - echo "Deploying Microservices to Kubernetes (Minikube)..."
+    - kubectl apply -f k8s/02-services.yaml
+
+    - echo "Applying ServiceMonitor for Prometheus Monitoring..."
+    - kubectl apply -f k8s/04-servicemonitor.yaml || true
+
+    - echo "Verifying rollout status for all deployments in namespace 'student-system'..."
+    - kubectl rollout status deployment/postgres -n student-system --timeout=120s
+    - kubectl rollout status deployment/kafka -n student-system --timeout=120s
+    - kubectl rollout status deployment/student-service -n student-system --timeout=180s
+    - kubectl rollout status deployment/grade-service -n student-system --timeout=180s
+    - kubectl rollout status deployment/analytics-service -n student-system --timeout=180s
+    - kubectl rollout status deployment/api-gateway -n student-system --timeout=180s
+
+    - echo "Deployment completed successfully!"
+    - kubectl get all,servicemonitor -n student-system
+  environment:
+    name: production-minikube
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'

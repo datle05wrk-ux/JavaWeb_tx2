@@ -1,0 +1,51 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  webflux:
+    static-path-pattern: "/**"
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+      routes:
+        - id: student-service-route
+          uri: ${STUDENT_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/students/**
+        - id: grade-service-route
+          uri: ${GRADE_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/grades/**
+        - id: analytics-service-route
+          uri: ${ANALYTICS_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/analytics/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

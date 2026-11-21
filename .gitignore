@@ -1,0 +1,19 @@
+# Compiled class file & Maven target
+target/
+*.class
+*.jar
+*.war
+
+# IDE & Editor
+.idea/
+.vscode/
+*.iml
+
+# Node / React (nếu có frontend)
+node_modules/
+dist/
+build/
+
+# Environment & Logs
+.env
+*.log

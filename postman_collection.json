@@ -1,0 +1,518 @@
+{
+  "info": {
+    "name": "Student Management Microservices - Full Test Suite",
+    "_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "description": "Bộ kiểm thử API tự động cho hệ thống Microservices: Student Service, Grade Service, Analytics Service qua API Gateway (Port 8080).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "studentId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "studentCode",
+      "value": "SV202601",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Thêm Sinh Viên Mới (POST /api/students)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"HTTP Status 201 Created\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "pm.test(\"Trả về đúng thông tin sinh viên vừa tạo\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json).to.have.property('id');",
+              "    pm.expect(json.studentCode).to.eql(pm.collectionVariables.get(\"studentCode\"));",
+              "    pm.collectionVariables.set(\"studentId\", json.id);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"studentCode\": \"{{studentCode}}\",\n  \"fullName\": \"Nguyễn Văn An\",\n  \"birthYear\": 2004,\n  \"email\": \"an.nguyen@haui.edu.vn\",\n  \"major\": \"Công nghệ thông tin\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/students",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "students"]
+        }
+      }
+    },
+    {
+      "name": "2. Tìm Kiếm & Tra Cứu Sinh Viên",
+      "item": [
+        {
+          "name": "2.1. Tra cứu theo ID (GET /api/students/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Khớp ID sinh viên\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(Number(pm.collectionVariables.get(\"studentId\")));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/students/{{studentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "students", "{{studentId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.2. Tra cứu theo Mã Sinh Viên (GET /api/students/code/{code})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Khớp mã sinh viên\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.studentCode).to.eql(pm.collectionVariables.get(\"studentCode\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/students/code/{{studentCode}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "students", "code", "{{studentCode}}"]
+            }
+          }
+        },
+        {
+          "name": "2.3. Tìm kiếm theo Từ Khóa (GET /api/students/search?keyword=...)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Danh sách tìm kiếm là mảng có phần tử\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(Array.isArray(json)).to.be.true;",
+                  "    pm.expect(json.length).to.be.greaterThan(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/students/search?keyword=Nguyen",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "students", "search"],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "Nguyen"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.4. Lấy tất cả sinh viên (GET /api/students)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/students",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "students"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Nhập Điểm Hợp Lệ (Test gRPC Sync + Kafka Async Event)",
+      "item": [
+        {
+          "name": "3.1. Nhập điểm môn 1 (Điểm cao: 8.5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 201 Created (Xác thực gRPC thành công & Bắn Kafka Event)\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Điểm số được lưu chính xác\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.studentId).to.eql(Number(pm.collectionVariables.get(\"studentId\")));",
+                  "    pm.expect(json.score).to.eql(8.5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": {{studentId}},\n  \"subjectName\": \"Kiến trúc Microservices\",\n  \"credits\": 3,\n  \"score\": 8.5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/grades",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "grades"]
+            }
+          }
+        },
+        {
+          "name": "3.2. Nhập điểm môn 2 (Điểm 9.0)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": {{studentId}},\n  \"subjectName\": \"Lập trình mạng nâng cao\",\n  \"credits\": 2,\n  \"score\": 9.0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/grades",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "grades"]
+            }
+          }
+        },
+        {
+          "name": "3.3. Xem bảng điểm & GPA tích lũy của sinh viên (GET /api/grades/student/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"GPA tính đúng và trạng thái ĐỖ\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.gpa).to.be.greaterThan(5.0);",
+                  "    pm.expect(json.status).to.eql(\"ĐỖ\");",
+                  "    pm.expect(json.grades.length).to.be.at.least(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/grades/student/{{studentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "grades", "student", "{{studentId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Nhập Điểm Lỗi Với ID Không Tồn Tại (Test gRPC Báo Lỗi 404)",
+      "item": [
+        {
+          "name": "4.1. Nhập điểm với studentId = 99999 (Kỳ vọng: HTTP 404 Not Found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 404 Not Found từ gRPC validation\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"Thông báo lỗi xác thực gRPC rõ ràng\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message).to.include(\"Không tìm thấy sinh viên có ID: 99999\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": 99999,\n  \"subjectName\": \"Toán rời rạc\",\n  \"credits\": 3,\n  \"score\": 7.0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/grades",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "grades"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Lọc Danh Sách Sinh Viên (Analytics Service)",
+      "item": [
+        {
+          "name": "5.1. Lọc theo Năm sinh, Khoảng điểm & Trạng thái ĐỖ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Tất cả sinh viên trả về đều có trạng thái ĐỖ và năm sinh 2004\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(Array.isArray(json)).to.be.true;",
+                  "    json.forEach(function(item) {",
+                  "        pm.expect(item.status).to.eql(\"ĐỖ\");",
+                  "        pm.expect(item.birthYear).to.eql(2004);",
+                  "        pm.expect(item.gpa).to.be.at.least(5.0);",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/filter?birthYear=2004&minGpa=5.0&maxGpa=10.0&status=ĐỖ",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "filter"],
+              "query": [
+                {
+                  "key": "birthYear",
+                  "value": "2004"
+                },
+                {
+                  "key": "minGpa",
+                  "value": "5.0"
+                },
+                {
+                  "key": "maxGpa",
+                  "value": "10.0"
+                },
+                {
+                  "key": "status",
+                  "value": "ĐỖ"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.2. Lọc danh sách sinh viên TRƯỢT (status = TRƯỢT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/filter?status=TRƯỢT",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "filter"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "TRƯỢT"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.3. Xem toàn bộ danh sách phân tích (Không truyền query params)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/filter",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "filter"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Giám Sát & Actuator Health Check Qua Gateway",
+      "item": [
+        {
+          "name": "6.1. Gateway Actuator Health (GET /actuator/health)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Gateway Status là UP\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"UP\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "6.2. Gateway Prometheus Metrics (GET /actuator/prometheus)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"HTTP Status 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Chứa metrics JVM/Spring\", function () {",
+                  "    pm.expect(pm.response.text()).to.include(\"jvm_memory_used_bytes\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/prometheus",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "prometheus"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
